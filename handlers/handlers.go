@@ -29,15 +29,15 @@ func NewBookHandler(repo BookStore) *BookHandler {
 }
 
 // RegisterRoutes wires the book endpoints onto the provided router group.
-func (h *BookHandler) RegisterRoutes(routerGroup *gin.RouterGroup) {
-	routerGroup.GET("/books", h.listBooks)
-	routerGroup.GET("/books/:id", h.getBook)
-	routerGroup.POST("/books", h.createBook)
-	routerGroup.DELETE("/books/:id", h.deleteBook)
+func (handler *BookHandler) RegisterRoutes(routerGroup *gin.RouterGroup) {
+	routerGroup.GET("/books", handler.listBooks)
+	routerGroup.GET("/books/:id", handler.getBook)
+	routerGroup.POST("/books", handler.createBook)
+	routerGroup.DELETE("/books/:id", handler.deleteBook)
 }
 
-func (h *BookHandler) listBooks(ctx *gin.Context) {
-	books, err := h.repo.FindAll()
+func (handler *BookHandler) listBooks(ctx *gin.Context) {
+	books, err := handler.repo.FindAll()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -45,14 +45,14 @@ func (h *BookHandler) listBooks(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, books)
 }
 
-func (h *BookHandler) getBook(ctx *gin.Context) {
+func (handler *BookHandler) getBook(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	book, err := h.repo.Find(uint(id))
+	book, err := handler.repo.Find(uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
@@ -64,14 +64,14 @@ func (h *BookHandler) getBook(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, book)
 }
 
-func (h *BookHandler) createBook(ctx *gin.Context) {
+func (handler *BookHandler) createBook(ctx *gin.Context) {
 	var book repository.Book
 	if err := ctx.ShouldBindJSON(&book); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.repo.Insert(&book); err != nil {
+	if err := handler.repo.Insert(&book); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -79,14 +79,14 @@ func (h *BookHandler) createBook(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, book)
 }
 
-func (h *BookHandler) deleteBook(ctx *gin.Context) {
+func (handler *BookHandler) deleteBook(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	if err := h.repo.Delete(uint(id)); err != nil {
+	if err := handler.repo.Delete(uint(id)); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
