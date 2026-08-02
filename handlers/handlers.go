@@ -1,92 +1,85 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
-	"sync"
 
+	"github.com/andersonkmi/bookapi/repository"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-type Book struct {
-	ID     int    `json:"id"`
-	Title  string `json:"title" binding:"required"`
-	Author string `json:"author" binding:"required"`
+// BookHandler wires HTTP endpoints to the book repository.
+type BookHandler struct {
+	repo *repository.BookRepository
 }
 
-var (
-	mu     sync.Mutex
-	books  = map[int]Book{}
-	nextID = 1
-)
+// NewBookHandler creates a BookHandler backed by the given repository.
+func NewBookHandler(repo *repository.BookRepository) *BookHandler {
+	return &BookHandler{repo: repo}
+}
 
 // RegisterRoutes wires the book endpoints onto the provided router group.
-func RegisterRoutes(routerGroup *gin.RouterGroup) {
-	routerGroup.GET("/books", listBooks)
-	routerGroup.GET("/books/:id", getBook)
-	routerGroup.POST("/books", createBook)
-	routerGroup.DELETE("/books/:id", deleteBook)
+func (h *BookHandler) RegisterRoutes(routerGroup *gin.RouterGroup) {
+	routerGroup.GET("/books", h.listBooks)
+	routerGroup.GET("/books/:id", h.getBook)
+	routerGroup.POST("/books", h.createBook)
+	routerGroup.DELETE("/books/:id", h.deleteBook)
 }
 
-func listBooks(ctx *gin.Context) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	out := make([]Book, 0, len(books))
-	for _, book := range books {
-		out = append(out, book)
+func (h *BookHandler) listBooks(ctx *gin.Context) {
+	books, err := h.repo.FindAll()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
-	ctx.JSON(http.StatusOK, out)
+	ctx.JSON(http.StatusOK, books)
 }
 
-func getBook(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
+func (h *BookHandler) getBook(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	mu.Lock()
-	book, ok := books[id]
-	mu.Unlock()
-
-	if !ok {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	book, err := h.repo.Find(uint(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	ctx.JSON(http.StatusOK, book)
 }
 
-func createBook(ctx *gin.Context) {
-	var book Book
+func (h *BookHandler) createBook(ctx *gin.Context) {
+	var book repository.Book
 	if err := ctx.ShouldBindJSON(&book); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	mu.Lock()
-	book.ID = nextID
-	nextID++
-	books[book.ID] = book
-	mu.Unlock()
+	if err := h.repo.Insert(&book); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	ctx.JSON(http.StatusCreated, book)
 }
 
-func deleteBook(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
+func (h *BookHandler) deleteBook(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	mu.Lock()
-	_, ok := books[id]
-	delete(books, id)
-	mu.Unlock()
-
-	if !ok {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+	if err := h.repo.Delete(uint(id)); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	ctx.Status(http.StatusNoContent)
