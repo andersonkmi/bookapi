@@ -35,6 +35,15 @@ func (r *BookRepository) Find(id uint) (*Book, error) {
 	return &book, nil
 }
 
+// FindAll retrieves all books.
+func (r *BookRepository) FindAll() ([]Book, error) {
+	var books []Book
+	if err := r.db.Find(&books).Error; err != nil {
+		return nil, err
+	}
+	return books, nil
+}
+
 // Delete removes a book by its ID.
 func (r *BookRepository) Delete(id uint) error {
 	return r.db.Delete(&Book{}, id).Error
