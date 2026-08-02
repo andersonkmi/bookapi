@@ -10,13 +10,21 @@ import (
 	"gorm.io/gorm"
 )
 
+// BookStore describes the data-access operations required by the handlers.
+type BookStore interface {
+	Insert(book *repository.Book) error
+	Find(id uint) (*repository.Book, error)
+	FindAll() ([]repository.Book, error)
+	Delete(id uint) error
+}
+
 // BookHandler wires HTTP endpoints to the book repository.
 type BookHandler struct {
-	repo *repository.BookRepository
+	repo BookStore
 }
 
 // NewBookHandler creates a BookHandler backed by the given repository.
-func NewBookHandler(repo *repository.BookRepository) *BookHandler {
+func NewBookHandler(repo BookStore) *BookHandler {
 	return &BookHandler{repo: repo}
 }
 
