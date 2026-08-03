@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ func newTestRepository(t *testing.T) *BookRepository {
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Book{}))
+	require.NoError(t, db.AutoMigrate(&Book{}, &Comment{}))
 
 	return NewBookRepository(db)
 }
@@ -53,4 +54,39 @@ func TestDelete(t *testing.T) {
 
 	_, err := repo.Find(book.ID)
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestInsertWithComments(t *testing.T) {
+	repo := newTestRepository(t)
+
+	book := &Book{
+		Title:    "With Comments",
+		Author:   "Author",
+		Comments: []Comment{{Text: "great read"}, {Text: "loved it"}},
+	}
+	require.NoError(t, repo.Insert(book))
+
+	found, err := repo.Find(book.ID)
+	require.NoError(t, err)
+	require.Len(t, found.Comments, 2)
+	assert.Equal(t, "great read", found.Comments[0].Text)
+	assert.Equal(t, book.ID, found.Comments[0].BookID)
+}
+
+func TestBookJSONExposesCommentsAsStrings(t *testing.T) {
+	book := Book{
+		ID:       1,
+		Title:    "The Go Programming Language",
+		Author:   "Donovan & Kernighan",
+		Comments: []Comment{{ID: 10, BookID: 1, Text: "great read"}},
+	}
+
+	data, err := json.Marshal(book)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"id":1,"title":"The Go Programming Language","author":"Donovan & Kernighan","comments":["great read"]}`, string(data))
+
+	var got Book
+	require.NoError(t, json.Unmarshal(data, &got))
+	require.Len(t, got.Comments, 1)
+	assert.Equal(t, "great read", got.Comments[0].Text)
 }

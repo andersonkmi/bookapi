@@ -5,3 +5,11 @@ CREATE TABLE books (
     title varchar not null unique,
     author varchar not null
 );
+
+CREATE SEQUENCE comments_id_sequence;
+
+CREATE TABLE comments (
+    id bigint not null primary key default nextval('comments_id_sequence'),
+    book_id bigint not null references books(id) on delete cascade,
+    text varchar not null
+);
