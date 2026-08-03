@@ -27,6 +27,12 @@ func (m *mockBookStore) FindAll() ([]repository.Book, error) {
 	return books, args.Error(1)
 }
 
+func (m *mockBookStore) AddComment(bookID uint, text string) (*repository.Comment, error) {
+	args := m.Called(bookID, text)
+	comment, _ := args.Get(0).(*repository.Comment)
+	return comment, args.Error(1)
+}
+
 func (m *mockBookStore) Delete(id uint) error {
 	args := m.Called(id)
 	return args.Error(0)

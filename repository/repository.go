@@ -93,6 +93,19 @@ func (r *BookRepository) FindAll() ([]Book, error) {
 	return books, nil
 }
 
+// AddComment appends a comment to an existing book and returns the stored comment.
+func (r *BookRepository) AddComment(bookID uint, text string) (*Comment, error) {
+	if err := r.db.First(&Book{}, bookID).Error; err != nil {
+		return nil, err
+	}
+
+	comment := Comment{BookID: bookID, Text: text}
+	if err := r.db.Create(&comment).Error; err != nil {
+		return nil, err
+	}
+	return &comment, nil
+}
+
 // Delete removes a book by its ID.
 func (r *BookRepository) Delete(id uint) error {
 	return r.db.Delete(&Book{}, id).Error

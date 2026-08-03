@@ -107,6 +107,35 @@ func (s *HandlersSuite) TestCreateBook() {
 	s.store.AssertExpectations(s.T())
 }
 
+func (s *HandlersSuite) TestAddComment() {
+	want := &repository.Comment{ID: 5, BookID: 1, Text: "great read"}
+	s.store.On("AddComment", uint(1), "great read").Return(want, nil)
+
+	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{"text": "great read"})
+
+	s.Equal(http.StatusCreated, rec.Code)
+	var got repository.Comment
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &got))
+	s.Equal(*want, got)
+	s.store.AssertExpectations(s.T())
+}
+
+func (s *HandlersSuite) TestAddCommentBookNotFound() {
+	s.store.On("AddComment", uint(99), "x").Return(nil, gorm.ErrRecordNotFound)
+
+	rec := s.request(http.MethodPost, "/api/v1/books/99/comments", map[string]string{"text": "x"})
+
+	s.Equal(http.StatusNotFound, rec.Code)
+	s.store.AssertExpectations(s.T())
+}
+
+func (s *HandlersSuite) TestAddCommentMissingText() {
+	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything)
+}
+
 func (s *HandlersSuite) TestDeleteBook() {
 	s.store.On("Delete", uint(1)).Return(nil)
 

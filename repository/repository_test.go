@@ -73,6 +73,30 @@ func TestInsertWithComments(t *testing.T) {
 	assert.Equal(t, book.ID, found.Comments[0].BookID)
 }
 
+func TestAddComment(t *testing.T) {
+	repo := newTestRepository(t)
+
+	book := &Book{Title: "Book", Author: "Author"}
+	require.NoError(t, repo.Insert(book))
+
+	comment, err := repo.AddComment(book.ID, "great read")
+	require.NoError(t, err)
+	require.NotZero(t, comment.ID)
+	assert.Equal(t, book.ID, comment.BookID)
+
+	found, err := repo.Find(book.ID)
+	require.NoError(t, err)
+	require.Len(t, found.Comments, 1)
+	assert.Equal(t, "great read", found.Comments[0].Text)
+}
+
+func TestAddCommentBookNotFound(t *testing.T) {
+	repo := newTestRepository(t)
+
+	_, err := repo.AddComment(999, "orphan")
+	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
 func TestBookJSONExposesCommentsAsStrings(t *testing.T) {
 	book := Book{
 		ID:       1,

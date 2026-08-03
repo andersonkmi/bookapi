@@ -15,6 +15,7 @@ type BookStore interface {
 	Insert(book *repository.Book) error
 	Find(id uint) (*repository.Book, error)
 	FindAll() ([]repository.Book, error)
+	AddComment(bookID uint, text string) (*repository.Comment, error)
 	Delete(id uint) error
 }
 
@@ -33,6 +34,7 @@ func (handler *BookHandler) RegisterRoutes(routerGroup *gin.RouterGroup) {
 	routerGroup.GET("/books", handler.listBooks)
 	routerGroup.GET("/books/:id", handler.getBook)
 	routerGroup.POST("/books", handler.createBook)
+	routerGroup.POST("/books/:id/comments", handler.addComment)
 	routerGroup.DELETE("/books/:id", handler.deleteBook)
 }
 
@@ -77,6 +79,34 @@ func (handler *BookHandler) createBook(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, book)
+}
+
+func (handler *BookHandler) addComment(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var body struct {
+		Text string `json:"text" binding:"required"`
+	}
+	if err := ctx.ShouldBindJSON(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	comment, err := handler.repo.AddComment(uint(id), body.Text)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, comment)
 }
 
 func (handler *BookHandler) deleteBook(ctx *gin.Context) {
