@@ -11,6 +11,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// main opens the database connection, wires the repository and handlers into a
+// Gin engine and serves the API on port 8080. It terminates the process when
+// the database is unreachable or the server cannot start.
 func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
