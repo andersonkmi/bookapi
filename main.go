@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/andersonkmi/bookapi/handlers"
 	"github.com/andersonkmi/bookapi/repository"
@@ -13,7 +19,8 @@ import (
 
 // main opens the database connection, wires the repository and handlers into a
 // Gin engine and serves the API on port 8080. It terminates the process when
-// the database is unreachable or the server cannot start.
+// the database is unreachable or the server cannot start, and shuts the server
+// down gracefully on SIGINT/SIGTERM.
 func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -36,7 +43,29 @@ func main() {
 	routerGroup := engine.Group("/api/v1")
 	bookHandler.RegisterRoutes(routerGroup)
 
-	if err := engine.Run(":8080"); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           engine,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("failed to start server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("failed to shut down server gracefully: %v", err)
 	}
 }

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,11 +20,18 @@ import (
 // [github.com/andersonkmi/bookapi/repository.BookRepository] satisfies this
 // interface.
 type BookStore interface {
-	Insert(book *repository.Book) error
-	Find(id uint) (*repository.Book, error)
-	FindAll() ([]repository.Book, error)
-	AddComment(bookID uint, text string) (*repository.Comment, error)
-	Delete(id uint) error
+	Insert(ctx context.Context, book *repository.Book) error
+	Find(ctx context.Context, id uint) (*repository.Book, error)
+	FindAll(ctx context.Context) ([]repository.Book, error)
+	AddComment(ctx context.Context, bookID uint, text string) (*repository.Comment, error)
+	Delete(ctx context.Context, id uint) error
+}
+
+// internalError logs the underlying error and responds with a generic 500 so
+// implementation details are never leaked to the client.
+func internalError(ctx *gin.Context, err error) {
+	log.Printf("%s %s: %v", ctx.Request.Method, ctx.Request.URL.Path, err)
+	ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 }
 
 // BookHandler wires HTTP endpoints to the book repository.
@@ -62,9 +71,9 @@ func (handler *BookHandler) RegisterRoutes(routerGroup *gin.RouterGroup) {
 // listBooks handles GET /books and responds with 200 and the JSON array of all
 // books, or 500 if the store fails.
 func (handler *BookHandler) listBooks(ctx *gin.Context) {
-	books, err := handler.repo.FindAll()
+	books, err := handler.repo.FindAll(ctx.Request.Context())
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(ctx, err)
 		return
 	}
 	ctx.JSON(http.StatusOK, books)
@@ -79,13 +88,13 @@ func (handler *BookHandler) getBook(ctx *gin.Context) {
 		return
 	}
 
-	book, err := handler.repo.Find(uint(id))
+	book, err := handler.repo.Find(ctx.Request.Context(), uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(ctx, err)
 		return
 	}
 	ctx.JSON(http.StatusOK, book)
@@ -102,18 +111,18 @@ func (handler *BookHandler) createBook(ctx *gin.Context) {
 		return
 	}
 
-	if book.Title == "" {
+	if strings.TrimSpace(book.Title) == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return
 	}
 
-	if book.Author == "" {
+	if strings.TrimSpace(book.Author) == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "author is required"})
 		return
 	}
 
-	if err := handler.repo.Insert(&book); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := handler.repo.Insert(ctx.Request.Context(), &book); err != nil {
+		internalError(ctx, err)
 		return
 	}
 
@@ -144,13 +153,13 @@ func (handler *BookHandler) addComment(ctx *gin.Context) {
 		return
 	}
 
-	comment, err := handler.repo.AddComment(uint(id), body.Text)
+	comment, err := handler.repo.AddComment(ctx.Request.Context(), uint(id), body.Text)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(ctx, err)
 		return
 	}
 
@@ -167,8 +176,8 @@ func (handler *BookHandler) deleteBook(ctx *gin.Context) {
 		return
 	}
 
-	if err := handler.repo.Delete(uint(id)); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := handler.repo.Delete(ctx.Request.Context(), uint(id)); err != nil {
+		internalError(ctx, err)
 		return
 	}
 	ctx.Status(http.StatusNoContent)

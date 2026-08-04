@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 
 	"gorm.io/gorm"
@@ -101,17 +102,17 @@ func NewBookRepository(db *gorm.DB) *BookRepository {
 // The book is updated in place with the generated ID; any comments attached to
 // it are inserted in the same operation. It returns the database error when the
 // insert fails.
-func (r *BookRepository) Insert(book *Book) error {
-	return r.db.Create(book).Error
+func (r *BookRepository) Insert(ctx context.Context, book *Book) error {
+	return r.db.WithContext(ctx).Create(book).Error
 }
 
 // Find retrieves a book by its ID, including its comments.
 //
 // It returns gorm.ErrRecordNotFound when no book matches id, or any other
 // database error encountered while querying.
-func (r *BookRepository) Find(id uint) (*Book, error) {
+func (r *BookRepository) Find(ctx context.Context, id uint) (*Book, error) {
 	var book Book
-	if err := r.db.Preload("Comments").First(&book, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Comments").First(&book, id).Error; err != nil {
 		return nil, err
 	}
 	return &book, nil
@@ -121,9 +122,9 @@ func (r *BookRepository) Find(id uint) (*Book, error) {
 //
 // An empty table yields an empty slice and a nil error; the result is not
 // paginated.
-func (r *BookRepository) FindAll() ([]Book, error) {
+func (r *BookRepository) FindAll(ctx context.Context) ([]Book, error) {
 	var books []Book
-	if err := r.db.Preload("Comments").Find(&books).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Comments").Find(&books).Error; err != nil {
 		return nil, err
 	}
 	return books, nil
@@ -134,13 +135,13 @@ func (r *BookRepository) FindAll() ([]Book, error) {
 // The book identified by bookID must exist; otherwise gorm.ErrRecordNotFound is
 // returned and nothing is written. The returned comment carries its generated
 // ID. The text is stored verbatim and is not validated here.
-func (r *BookRepository) AddComment(bookID uint, text string) (*Comment, error) {
-	if err := r.db.First(&Book{}, bookID).Error; err != nil {
+func (r *BookRepository) AddComment(ctx context.Context, bookID uint, text string) (*Comment, error) {
+	if err := r.db.WithContext(ctx).First(&Book{}, bookID).Error; err != nil {
 		return nil, err
 	}
 
 	comment := Comment{BookID: bookID, Text: text}
-	if err := r.db.Create(&comment).Error; err != nil {
+	if err := r.db.WithContext(ctx).Create(&comment).Error; err != nil {
 		return nil, err
 	}
 	return &comment, nil
@@ -150,6 +151,6 @@ func (r *BookRepository) AddComment(bookID uint, text string) (*Comment, error) 
 //
 // Its comments are removed as well through the cascading foreign key. Deleting
 // an ID that does not exist is a no-op and reports no error.
-func (r *BookRepository) Delete(id uint) error {
-	return r.db.Delete(&Book{}, id).Error
+func (r *BookRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&Book{}, id).Error
 }

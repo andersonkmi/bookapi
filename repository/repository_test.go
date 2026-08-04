@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -24,10 +25,10 @@ func TestInsertAndFind(t *testing.T) {
 	repo := newTestRepository(t)
 
 	book := &Book{Title: "The Go Programming Language", Author: "Donovan & Kernighan"}
-	require.NoError(t, repo.Insert(book))
+	require.NoError(t, repo.Insert(context.Background(), book))
 	require.NotZero(t, book.ID)
 
-	found, err := repo.Find(book.ID)
+	found, err := repo.Find(context.Background(), book.ID)
 	require.NoError(t, err)
 	assert.Equal(t, book.Title, found.Title)
 	assert.Equal(t, book.Author, found.Author)
@@ -36,10 +37,10 @@ func TestInsertAndFind(t *testing.T) {
 func TestFindAll(t *testing.T) {
 	repo := newTestRepository(t)
 
-	require.NoError(t, repo.Insert(&Book{Title: "Book A", Author: "Author A"}))
-	require.NoError(t, repo.Insert(&Book{Title: "Book B", Author: "Author B"}))
+	require.NoError(t, repo.Insert(context.Background(), &Book{Title: "Book A", Author: "Author A"}))
+	require.NoError(t, repo.Insert(context.Background(), &Book{Title: "Book B", Author: "Author B"}))
 
-	books, err := repo.FindAll()
+	books, err := repo.FindAll(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, books, 2)
 }
@@ -48,11 +49,11 @@ func TestDelete(t *testing.T) {
 	repo := newTestRepository(t)
 
 	book := &Book{Title: "Ephemeral", Author: "Author"}
-	require.NoError(t, repo.Insert(book))
+	require.NoError(t, repo.Insert(context.Background(), book))
 
-	require.NoError(t, repo.Delete(book.ID))
+	require.NoError(t, repo.Delete(context.Background(), book.ID))
 
-	_, err := repo.Find(book.ID)
+	_, err := repo.Find(context.Background(), book.ID)
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
 
@@ -64,9 +65,9 @@ func TestInsertWithComments(t *testing.T) {
 		Author:   "Author",
 		Comments: []Comment{{Text: "great read"}, {Text: "loved it"}},
 	}
-	require.NoError(t, repo.Insert(book))
+	require.NoError(t, repo.Insert(context.Background(), book))
 
-	found, err := repo.Find(book.ID)
+	found, err := repo.Find(context.Background(), book.ID)
 	require.NoError(t, err)
 	require.Len(t, found.Comments, 2)
 	assert.Equal(t, "great read", found.Comments[0].Text)
@@ -77,14 +78,14 @@ func TestAddComment(t *testing.T) {
 	repo := newTestRepository(t)
 
 	book := &Book{Title: "Book", Author: "Author"}
-	require.NoError(t, repo.Insert(book))
+	require.NoError(t, repo.Insert(context.Background(), book))
 
-	comment, err := repo.AddComment(book.ID, "great read")
+	comment, err := repo.AddComment(context.Background(), book.ID, "great read")
 	require.NoError(t, err)
 	require.NotZero(t, comment.ID)
 	assert.Equal(t, book.ID, comment.BookID)
 
-	found, err := repo.Find(book.ID)
+	found, err := repo.Find(context.Background(), book.ID)
 	require.NoError(t, err)
 	require.Len(t, found.Comments, 1)
 	assert.Equal(t, "great read", found.Comments[0].Text)
@@ -93,7 +94,7 @@ func TestAddComment(t *testing.T) {
 func TestAddCommentBookNotFound(t *testing.T) {
 	repo := newTestRepository(t)
 
-	_, err := repo.AddComment(999, "orphan")
+	_, err := repo.AddComment(context.Background(), 999, "orphan")
 	assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
 

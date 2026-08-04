@@ -59,7 +59,7 @@ func (s *HandlersSuite) TestListBooks() {
 		{ID: 1, Title: "Book A", Author: "Author A"},
 		{ID: 2, Title: "Book B", Author: "Author B"},
 	}
-	s.store.On("FindAll").Return(want, nil)
+	s.store.On("FindAll", mock.Anything).Return(want, nil)
 
 	rec := s.request(http.MethodGet, "/api/v1/books", nil)
 
@@ -70,9 +70,21 @@ func (s *HandlersSuite) TestListBooks() {
 	s.store.AssertExpectations(s.T())
 }
 
+func (s *HandlersSuite) TestListBooksDBError() {
+	s.store.On("FindAll", mock.Anything).Return([]repository.Book(nil), errors.New("db failure"))
+
+	rec := s.request(http.MethodGet, "/api/v1/books", nil)
+
+	s.Equal(http.StatusInternalServerError, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("internal server error", body["error"])
+	s.store.AssertExpectations(s.T())
+}
+
 func (s *HandlersSuite) TestGetBookFound() {
 	want := &repository.Book{ID: 1, Title: "Book A", Author: "Author A"}
-	s.store.On("Find", uint(1)).Return(want, nil)
+	s.store.On("Find", mock.Anything, uint(1)).Return(want, nil)
 
 	rec := s.request(http.MethodGet, "/api/v1/books/1", nil)
 
@@ -84,7 +96,7 @@ func (s *HandlersSuite) TestGetBookFound() {
 }
 
 func (s *HandlersSuite) TestGetBookNotFound() {
-	s.store.On("Find", uint(99)).Return(nil, gorm.ErrRecordNotFound)
+	s.store.On("Find", mock.Anything, uint(99)).Return(nil, gorm.ErrRecordNotFound)
 
 	rec := s.request(http.MethodGet, "/api/v1/books/99", nil)
 
@@ -92,15 +104,27 @@ func (s *HandlersSuite) TestGetBookNotFound() {
 	s.store.AssertExpectations(s.T())
 }
 
+func (s *HandlersSuite) TestGetBookDBError() {
+	s.store.On("Find", mock.Anything, uint(1)).Return(nil, errors.New("db failure"))
+
+	rec := s.request(http.MethodGet, "/api/v1/books/1", nil)
+
+	s.Equal(http.StatusInternalServerError, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("internal server error", body["error"])
+	s.store.AssertExpectations(s.T())
+}
+
 func (s *HandlersSuite) TestGetBookInvalidID() {
 	rec := s.request(http.MethodGet, "/api/v1/books/abc", nil)
 
 	s.Equal(http.StatusBadRequest, rec.Code)
-	s.store.AssertNotCalled(s.T(), "Find", mock.Anything)
+	s.store.AssertNotCalled(s.T(), "Find", mock.Anything, mock.Anything)
 }
 
 func (s *HandlersSuite) TestCreateBook() {
-	s.store.On("Insert", mock.AnythingOfType("*repository.Book")).Return(nil)
+	s.store.On("Insert", mock.Anything, mock.AnythingOfType("*repository.Book")).Return(nil)
 
 	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "New", Author: "Author"})
 
@@ -109,14 +133,14 @@ func (s *HandlersSuite) TestCreateBook() {
 }
 
 func (s *HandlersSuite) TestCreateBookInsertError() {
-	s.store.On("Insert", mock.AnythingOfType("*repository.Book")).Return(errors.New("db failure"))
+	s.store.On("Insert", mock.Anything, mock.AnythingOfType("*repository.Book")).Return(errors.New("db failure"))
 
 	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "New", Author: "Author"})
 
 	s.Equal(http.StatusInternalServerError, rec.Code)
 	var body map[string]string
 	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
-	s.Equal("db failure", body["error"])
+	s.Equal("internal server error", body["error"])
 	s.store.AssertExpectations(s.T())
 }
 
@@ -127,7 +151,7 @@ func (s *HandlersSuite) TestCreateBookMissingTitle() {
 	var body map[string]string
 	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
 	s.Equal("title is required", body["error"])
-	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything)
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything, mock.Anything)
 }
 
 func (s *HandlersSuite) TestCreateBookMissingAuthor() {
@@ -137,12 +161,32 @@ func (s *HandlersSuite) TestCreateBookMissingAuthor() {
 	var body map[string]string
 	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
 	s.Equal("author is required", body["error"])
-	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything)
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything, mock.Anything)
+}
+
+func (s *HandlersSuite) TestCreateBookBlankTitle() {
+	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "   ", Author: "Author"})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("title is required", body["error"])
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything, mock.Anything)
+}
+
+func (s *HandlersSuite) TestCreateBookBlankAuthor() {
+	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "New", Author: "   "})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("author is required", body["error"])
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything, mock.Anything)
 }
 
 func (s *HandlersSuite) TestAddComment() {
 	want := &repository.Comment{ID: 5, BookID: 1, Text: "great read"}
-	s.store.On("AddComment", uint(1), "great read").Return(want, nil)
+	s.store.On("AddComment", mock.Anything, uint(1), "great read").Return(want, nil)
 
 	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{"text": "great read"})
 
@@ -154,7 +198,7 @@ func (s *HandlersSuite) TestAddComment() {
 }
 
 func (s *HandlersSuite) TestAddCommentBookNotFound() {
-	s.store.On("AddComment", uint(99), "x").Return(nil, gorm.ErrRecordNotFound)
+	s.store.On("AddComment", mock.Anything, uint(99), "x").Return(nil, gorm.ErrRecordNotFound)
 
 	rec := s.request(http.MethodPost, "/api/v1/books/99/comments", map[string]string{"text": "x"})
 
@@ -162,11 +206,23 @@ func (s *HandlersSuite) TestAddCommentBookNotFound() {
 	s.store.AssertExpectations(s.T())
 }
 
+func (s *HandlersSuite) TestAddCommentDBError() {
+	s.store.On("AddComment", mock.Anything, uint(1), "great read").Return(nil, errors.New("db failure"))
+
+	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{"text": "great read"})
+
+	s.Equal(http.StatusInternalServerError, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("internal server error", body["error"])
+	s.store.AssertExpectations(s.T())
+}
+
 func (s *HandlersSuite) TestAddCommentMissingText() {
 	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{})
 
 	s.Equal(http.StatusBadRequest, rec.Code)
-	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything)
+	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func (s *HandlersSuite) TestAddCommentBlankText() {
@@ -176,14 +232,26 @@ func (s *HandlersSuite) TestAddCommentBlankText() {
 	var body map[string]string
 	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
 	s.Equal("text is required", body["error"])
-	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything)
+	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func (s *HandlersSuite) TestDeleteBook() {
-	s.store.On("Delete", uint(1)).Return(nil)
+	s.store.On("Delete", mock.Anything, uint(1)).Return(nil)
 
 	rec := s.request(http.MethodDelete, "/api/v1/books/1", nil)
 
 	s.Equal(http.StatusNoContent, rec.Code)
+	s.store.AssertExpectations(s.T())
+}
+
+func (s *HandlersSuite) TestDeleteBookDBError() {
+	s.store.On("Delete", mock.Anything, uint(1)).Return(errors.New("db failure"))
+
+	rec := s.request(http.MethodDelete, "/api/v1/books/1", nil)
+
+	s.Equal(http.StatusInternalServerError, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("internal server error", body["error"])
 	s.store.AssertExpectations(s.T())
 }
