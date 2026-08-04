@@ -169,6 +169,16 @@ func (s *HandlersSuite) TestAddCommentMissingText() {
 	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything)
 }
 
+func (s *HandlersSuite) TestAddCommentBlankText() {
+	rec := s.request(http.MethodPost, "/api/v1/books/1/comments", map[string]string{"text": "   "})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("text is required", body["error"])
+	s.store.AssertNotCalled(s.T(), "AddComment", mock.Anything, mock.Anything)
+}
+
 func (s *HandlersSuite) TestDeleteBook() {
 	s.store.On("Delete", uint(1)).Return(nil)
 

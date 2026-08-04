@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/andersonkmi/bookapi/repository"
 	"github.com/gin-gonic/gin"
@@ -103,6 +104,11 @@ func (handler *BookHandler) addComment(ctx *gin.Context) {
 	}
 	if err := ctx.ShouldBindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if strings.TrimSpace(body.Text) == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "text is required"})
 		return
 	}
 
