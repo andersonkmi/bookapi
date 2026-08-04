@@ -73,6 +73,16 @@ func (handler *BookHandler) createBook(ctx *gin.Context) {
 		return
 	}
 
+	if book.Title == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+
+	if book.Author == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "author is required"})
+		return
+	}
+
 	if err := handler.repo.Insert(&book); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

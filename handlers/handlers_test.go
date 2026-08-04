@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -105,6 +106,38 @@ func (s *HandlersSuite) TestCreateBook() {
 
 	s.Equal(http.StatusCreated, rec.Code)
 	s.store.AssertExpectations(s.T())
+}
+
+func (s *HandlersSuite) TestCreateBookInsertError() {
+	s.store.On("Insert", mock.AnythingOfType("*repository.Book")).Return(errors.New("db failure"))
+
+	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "New", Author: "Author"})
+
+	s.Equal(http.StatusInternalServerError, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("db failure", body["error"])
+	s.store.AssertExpectations(s.T())
+}
+
+func (s *HandlersSuite) TestCreateBookMissingTitle() {
+	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Author: "Author"})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("title is required", body["error"])
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything)
+}
+
+func (s *HandlersSuite) TestCreateBookMissingAuthor() {
+	rec := s.request(http.MethodPost, "/api/v1/books", repository.Book{Title: "New"})
+
+	s.Equal(http.StatusBadRequest, rec.Code)
+	var body map[string]string
+	s.Require().NoError(json.Unmarshal(rec.Body.Bytes(), &body))
+	s.Equal("author is required", body["error"])
+	s.store.AssertNotCalled(s.T(), "Insert", mock.Anything)
 }
 
 func (s *HandlersSuite) TestAddComment() {
